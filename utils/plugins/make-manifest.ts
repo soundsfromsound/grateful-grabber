@@ -6,13 +6,15 @@ import ManifestParser from "../manifest-parser";
 
 const { resolve } = path;
 
-const distDir = resolve(__dirname, "..", "..", "dist");
-const publicDir = resolve(__dirname, "..", "..", "public");
+const rootDir = resolve(__dirname, "..", "..");
+const publicDir = resolve(rootDir, "public");
 
 export default function makeManifest(
-  manifest: chrome.runtime.ManifestV3,
-  config: { isDev: boolean; contentScriptCssKey?: string }
+  manifest: chrome.runtime.ManifestV3 | Record<string, unknown>,
+  config: { isDev: boolean; contentScriptCssKey?: string; outDir?: string }
 ): PluginOption {
+  const distDir = config.outDir ?? resolve(rootDir, "dist");
+
   function makeManifest(to: string) {
     if (!fs.existsSync(to)) {
       fs.mkdirSync(to);
@@ -20,8 +22,9 @@ export default function makeManifest(
     const manifestPath = resolve(to, "manifest.json");
 
     // Naming change for cache invalidation
+    const m = manifest as chrome.runtime.ManifestV3;
     if (config.contentScriptCssKey) {
-      manifest.content_scripts.forEach((script) => {
+      m.content_scripts.forEach((script) => {
         script.css = script.css.map((css) =>
           css.replace("<KEY>", config.contentScriptCssKey)
         );
@@ -30,7 +33,7 @@ export default function makeManifest(
 
     fs.writeFileSync(
       manifestPath,
-      ManifestParser.convertManifestToString(manifest)
+      ManifestParser.convertManifestToString(m)
     );
 
     colorLog(`Manifest file copy complete: ${manifestPath}`, "success");

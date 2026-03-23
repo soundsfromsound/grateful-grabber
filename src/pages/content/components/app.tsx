@@ -4,30 +4,25 @@ import {
   ArchiveShow,
   Track,
 } from "@pages/content/models/interfaces";
-import pickBy from "lodash-es/pickBy";
-import findKey from "lodash-es/findKey";
-import JSZip from "jszip";
+import { zipSync } from "fflate";
 
 const getTracks = (show: ArchiveShow): Track[] => {
-  const mp3Files = pickBy(show.files, function (file: ArchiveFile) {
-    return file.format === "VBR MP3";
-  });
   const baseURL = `https://${show.server}${show.dir}`;
-  return Object.keys(mp3Files).map((key, index) => {
-    const data = mp3Files[key];
-    const url = baseURL + key;
-    let title = data.title || data.original;
-    title = title.replace(/-|[^-_,A-Za-z0-9 ]+/g, "").trim();
-    return { title: index + 1 + ". " + title, url: url } as Track;
-  });
+  return Object.entries(show.files)
+    .filter(([, file]: [string, ArchiveFile]) => file.format === "VBR MP3")
+    .map(([key, data], index) => {
+      const url = baseURL + key;
+      let title = data.title || data.original;
+      title = title.replace(/-|[^-_,A-Za-z0-9 ]+/g, "").trim();
+      return { title: index + 1 + ". " + title, url } as Track;
+    });
 };
 
 const getInfoFileUrl = (show: ArchiveShow) => {
   const baseURL = `https://${show.server}${show.dir}`;
-  const infoFile = findKey(show.files, (value, key) => {
-    return value.format === "Text" && key !== "/ffp.txt";
-  });
-
+  const infoFile = Object.keys(show.files).find(
+    (key) => show.files[key].format === "Text" && key !== "/ffp.txt"
+  );
   return `${baseURL}/${infoFile}`;
 };
 
@@ -275,26 +270,27 @@ async function createZip(
   show: ArchiveShow,
   onProgress: (progress: number) => void
 ): Promise<Blob> {
-  const zip = new JSZip();
+  const files: Record<string, Uint8Array> = {};
   let completedCount = 0;
   const mp3Urls = getTracks(show);
   const infoFile = getInfoFileUrl(show);
 
   const infoBlob = await getFileBlob(infoFile);
-  zip.file("info.txt", infoBlob);
+  files["info.txt"] = new Uint8Array(await infoBlob.arrayBuffer());
 
-  for (const url of mp3Urls) {
-    const mp3Blob = await getFileBlob(url.url, (progress) => {
+  for (const track of mp3Urls) {
+    const mp3Blob = await getFileBlob(track.url, (progress) => {
       const overallProgress = (completedCount + progress) / mp3Urls.length;
       onProgress(overallProgress);
     });
 
-    zip.file(`${url.title}.mp3`, mp3Blob);
+    files[`${track.title}.mp3`] = new Uint8Array(await mp3Blob.arrayBuffer());
     completedCount++;
     onProgress(completedCount / mp3Urls.length);
   }
 
-  return await zip.generateAsync({ type: "blob" });
+  const zipped = zipSync(files);
+  return new Blob([zipped], { type: "application/zip" });
 }
 
 function downloadZip(
@@ -307,5 +303,5 @@ function downloadZip(
   a.href = url;
   a.download = `${folderName}.zip`;
   a.click();
-  onProgress(1); // Mark progress as completed
+  onProgress(1);
 }
