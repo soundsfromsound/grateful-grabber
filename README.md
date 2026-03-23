@@ -22,3 +22,8 @@
 - [Main page content](/src/pages/content)
 - [Extension icon content](/src/pages/popup)
 - [Background](/src/pages/background)
+
+
+## Publishing URLS
+- [Mozilla](https://addons.mozilla.org/en-US/developers/addon/gratefulgrabber/edit)
+- [Chrome](https://chrome.google.com/webstore/devconsole/dcd03685-26db-4395-878f-2cdbd0bfc445/oaodbbeaklbdmjcghbkcfgmioafnjbfe/edit/listing)

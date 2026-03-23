@@ -6,7 +6,7 @@ export default function addHmrIntoScript(watchPath: string) {
     onUpdate: () => {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
-      chrome.runtime.reload();
+      globalThis.browser.runtime.reload();
     },
   });
 }
