@@ -12,6 +12,7 @@ const manifest = {
     gecko: {
       id: "grateful-grabber@chrisbendel.com",
       strict_min_version: "128.0",
+      data_collection_permissions: { required: ["none"] },
     },
   },
   background: {

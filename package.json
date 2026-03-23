@@ -9,6 +9,10 @@
   },
   "scripts": {
     "build": "npm run build:chrome && npm run build:firefox",
+    "package": "npm run build && npm run package:chrome && npm run package:firefox && npm run package:source",
+    "package:chrome": "cd dist/chrome && zip -qr ../../grateful-grabber-chrome.zip .",
+    "package:firefox": "cd dist/firefox && zip -qr ../../grateful-grabber-firefox.zip .",
+    "package:source": "zip -qr grateful-grabber-source.zip . -x 'node_modules/*' -x 'dist/*' -x '.git/*' -x '.github/*' -x 'web-ext-artifacts/*' -x '*.zip'",
     "lint": "eslint src --ext .ts,.tsx",
     "build:chrome": "tsc --noEmit && cross-env BROWSER=chrome vite build && cross-env BROWSER=chrome vite build --config vite.content.config.ts",
     "build:firefox": "tsc --noEmit && cross-env BROWSER=firefox vite build && cross-env BROWSER=firefox vite build --config vite.content.config.ts",
