@@ -4,7 +4,6 @@ import {
   ArchiveShow,
   Track,
 } from "@pages/content/models/interfaces";
-import { zipSync } from "fflate";
 
 const getTracks = (show: ArchiveShow): Track[] => {
   const baseURL = `https://${show.server}${show.dir}`;
@@ -25,6 +24,7 @@ const getInfoFileUrl = (show: ArchiveShow) => {
   );
   return `${baseURL}/${infoFile}`;
 };
+
 
 const getShowTitle = (show: ArchiveShow) => {
   return prompt(
@@ -170,30 +170,101 @@ const DownloadIndividualSong: FC<{ show: ArchiveShow }> = ({ show }) => {
 const DownloadButton: FC<{ show: ArchiveShow }> = ({ show }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
 
   const downloadShow = async (archiveShow: ArchiveShow) => {
     setError(null);
+    setLoading(true);
+    setProgress(0);
+    setSuccess(false);
 
     const showTitle = getShowTitle(archiveShow);
-    if (!showTitle) return;
+    if (!showTitle) {
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
+    try {
+      const tracks = getTracks(archiveShow);
 
-    await createZip(archiveShow, setProgress)
-      .then((blob) => downloadZip(showTitle, blob, setProgress))
-      .catch((error) => {
-        setError(error.toString());
-        setLoading(false);
-        console.error("Error:", error);
-      });
+      // Kick off all downloads via the background script and get their IDs
+      const downloadPromises = [
+        chrome.runtime.sendMessage({
+          type: "download",
+          url: getInfoFileUrl(archiveShow),
+          filename: `${showTitle}/info.txt`,
+        }),
+        ...tracks.map((track) =>
+          chrome.runtime.sendMessage({
+            type: "download",
+            url: track.url,
+            filename: `${showTitle}/${track.title}.mp3`,
+          })
+        ),
+      ];
 
-    setLoading(false);
-    setProgress(0);
+      const downloadIds = await Promise.all(downloadPromises);
+
+      // Poll the background script for progress
+      const totalFiles = downloadIds.length;
+      let completed = 0;
+
+      while (completed < totalFiles) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // returns an array of DownloadItems corresponding to downloadIds
+        const states = await chrome.runtime.sendMessage({
+          type: "check_progress",
+          downloadIds
+        });
+
+        let currentCompleted = 0;
+        let totalBytes = 0;
+        let receivedBytes = 0;
+
+        states.forEach((state) => {
+          if (!state) {
+            currentCompleted++;
+            return;
+          }
+          if (state.state === "complete") {
+            currentCompleted++;
+          }
+
+          if (state.totalBytes > 0) {
+            totalBytes += state.totalBytes;
+            receivedBytes += state.bytesReceived;
+          }
+        });
+
+        completed = currentCompleted;
+
+        // Either accurately track bytes or fallback to file count progress
+        if (totalBytes > 0) {
+          setProgress(receivedBytes / totalBytes);
+        } else {
+          setProgress(completed / totalFiles);
+        }
+      }
+
+      setProgress(1);
+      setSuccess(true);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err.toString());
+      console.error("Error:", err);
+    } finally {
+      setLoading(false);
+      setTimeout(() => {
+        setProgress(0);
+        setSuccess(false);
+      }, 5000);
+    }
   };
 
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
       <button
         onClick={() => downloadShow(show)}
         className="minimalist-button"
@@ -201,18 +272,24 @@ const DownloadButton: FC<{ show: ArchiveShow }> = ({ show }) => {
       >
         {loading ? "Downloading... Please be patient" : "Download Show"}
       </button>
-      {progress ? <progress value={progress}> </progress> : null}
+      {progress && !success ? <progress value={progress}> </progress> : null}
+      {success && (
+        <span style={{ color: "lightgreen", fontSize: ".85em" }}>
+          Success!
+        </span>
+      )}
       {error && (
         <span
           style={{
             fontSize: ".75em",
+            color: "red"
           }}
         >
           Something went wrong, restart the download, it should pick up where
           you left off :)
         </span>
       )}
-    </>
+    </div>
   );
 };
 
@@ -233,75 +310,3 @@ async function downloadFile(url: string, fileName: string, extension = ".mp3") {
   URL.revokeObjectURL(a.href);
 }
 
-async function getFileBlob(
-  url: string,
-  onProgress?: (progress: number) => void
-): Promise<Blob> {
-  const response = await fetchWithRetry(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url}`);
-  }
-
-  const contentLength = parseInt(
-    response.headers.get("Content-Length") || "0",
-    10
-  );
-  let receivedLength = 0;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    chunks.push(value);
-    receivedLength += value.length;
-    const progress = receivedLength / contentLength;
-    onProgress?.(progress);
-  }
-
-  return new Blob(chunks);
-}
-
-async function createZip(
-  show: ArchiveShow,
-  onProgress: (progress: number) => void
-): Promise<Blob> {
-  const files: Record<string, Uint8Array> = {};
-  let completedCount = 0;
-  const mp3Urls = getTracks(show);
-  const infoFile = getInfoFileUrl(show);
-
-  const infoBlob = await getFileBlob(infoFile);
-  files["info.txt"] = new Uint8Array(await infoBlob.arrayBuffer());
-
-  for (const track of mp3Urls) {
-    const mp3Blob = await getFileBlob(track.url, (progress) => {
-      const overallProgress = (completedCount + progress) / mp3Urls.length;
-      onProgress(overallProgress);
-    });
-
-    files[`${track.title}.mp3`] = new Uint8Array(await mp3Blob.arrayBuffer());
-    completedCount++;
-    onProgress(completedCount / mp3Urls.length);
-  }
-
-  const zipped = zipSync(files);
-  return new Blob([zipped], { type: "application/zip" });
-}
-
-function downloadZip(
-  folderName: string,
-  blob: Blob,
-  onProgress: (progress: number) => void
-) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${folderName}.zip`;
-  a.click();
-  onProgress(1);
-}

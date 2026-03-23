@@ -17,6 +17,7 @@ const manifest: chrome.runtime.ManifestV3 = {
     default_popup: "src/pages/popup/index.html",
     default_icon: "stealie-128.png",
   },
+  permissions: ["downloads"],
   icons: {
     "128": "stealie-128.png",
   },
