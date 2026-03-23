@@ -25,7 +25,6 @@ const getInfoFileUrl = (show: ArchiveShow) => {
   return `${baseURL}/${infoFile}`;
 };
 
-
 const getShowTitle = (show: ArchiveShow) => {
   return prompt(
     `Custom folder title? Default ${show.metadata.date[0]}`,
@@ -50,6 +49,7 @@ async function fetchWithRedirect(url: string) {
 
 async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
   let retries = 0;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const response = await fetchWithRedirect(url);
@@ -216,7 +216,7 @@ const DownloadButton: FC<{ show: ArchiveShow }> = ({ show }) => {
         // returns an array of DownloadItems corresponding to downloadIds
         const states = await chrome.runtime.sendMessage({
           type: "check_progress",
-          downloadIds
+          downloadIds,
         });
 
         let currentCompleted = 0;
@@ -264,20 +264,31 @@ const DownloadButton: FC<{ show: ArchiveShow }> = ({ show }) => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "0.5rem",
+      }}
+    >
       <button
         onClick={() => downloadShow(show)}
         className="minimalist-button"
         disabled={loading || success}
       >
-        {loading ? "Downloading... Please be patient" : (success ? "Success!" : "Download Show")}
+        {loading
+          ? "Downloading... Please be patient"
+          : success
+          ? "Success!"
+          : "Download Show"}
       </button>
       {progress && !success ? <progress value={progress}> </progress> : null}
       {error && (
         <span
           style={{
             fontSize: ".75em",
-            color: "red"
+            color: "red",
           }}
         >
           Something went wrong, restart the download, it should pick up where
@@ -304,4 +315,3 @@ async function downloadFile(url: string, fileName: string, extension = ".mp3") {
 
   URL.revokeObjectURL(a.href);
 }
-

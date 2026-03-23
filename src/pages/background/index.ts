@@ -13,11 +13,13 @@ console.log("background loaded");
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "download") {
-    chrome.downloads.download({
-      url: message.url,
-      filename: message.filename,
-      saveAs: message.saveAs ?? false,
-    }).then(sendResponse);
+    chrome.downloads
+      .download({
+        url: message.url,
+        filename: message.filename,
+        saveAs: message.saveAs ?? false,
+      })
+      .then(sendResponse);
     return true; // Keep message channel open
   }
   if (message?.type === "check_progress") {
