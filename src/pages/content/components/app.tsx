@@ -268,16 +268,11 @@ const DownloadButton: FC<{ show: ArchiveShow }> = ({ show }) => {
       <button
         onClick={() => downloadShow(show)}
         className="minimalist-button"
-        disabled={loading}
+        disabled={loading || success}
       >
-        {loading ? "Downloading... Please be patient" : "Download Show"}
+        {loading ? "Downloading... Please be patient" : (success ? "Success!" : "Download Show")}
       </button>
       {progress && !success ? <progress value={progress}> </progress> : null}
-      {success && (
-        <span style={{ color: "lightgreen", fontSize: ".85em" }}>
-          Success!
-        </span>
-      )}
       {error && (
         <span
           style={{
