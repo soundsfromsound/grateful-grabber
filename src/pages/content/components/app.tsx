@@ -26,10 +26,10 @@ const getInfoFileUrl = (show: ArchiveShow) => {
 };
 
 const getShowTitle = (show: ArchiveShow) => {
-  return prompt(
-    `Custom folder title? Default ${show.metadata.date[0]}`,
-    show.metadata.date[0]
-  );
+  const identifier =
+    window.location.pathname.split("/details/")[1]?.split("/")[0] ||
+    show.metadata.date[0];
+  return prompt(`Custom folder title? Default ${identifier}`, identifier);
 };
 
 async function fetchWithRedirect(url: string) {
